@@ -1,0 +1,229 @@
+==============================================================================
+PALO ALTO: ROUTING TABLE & BGP TROUBLESHOOTING GUIDE
+==============================================================================
+
+==============================================================================
+1. ROUTING TABLE OVERVIEW
+==============================================================================
+Use this to display the full routing table
+
+show routing route                              # Full routing table
+show routing summary                            # Route counts and resource usage
+
+--- EXAMPLE ---
+show routing route
+
+--- KEY FLAGS ---
+A  -> Active (installed in FIB)
+C  -> Connected
+H  -> Host route (/32)
+S  -> Static
+B  -> BGP learned
+?  -> Loose (recursive / unresolved path)
+
+--- KEY OBSERVATIONS ---
+- Default route present (0.0.0.0/0)
+- Mix of Connected, Static, and BGP routes
+- Majority of routes learned via BGP
+
+==============================================================================
+
+==============================================================================
+2. DEFAULT ROUTE VERIFICATION
+==============================================================================
+Use this to confirm internet/egress path
+
+show routing route | match 0.0.0.0
+
+--- CURRENT DEFAULT ROUTE ---
+0.0.0.0/0 → 172.20.255.1 via ae1.2100 (Static)
+
+--- KEY CHECKS ---
+- Nexthop reachable? (172.20.255.1)
+- Interface up? (ae1.2100)
+- ARP resolved?
+
+--- TROUBLE INDICATORS ---
+- Missing default route → no internet access
+- Wrong nexthop → blackhole traffic
+
+==============================================================================
+
+==============================================================================
+3. CONNECTED ROUTES (LOCAL INTERFACES)
+==============================================================================
+Use this to verify directly connected networks
+
+show routing route type connect
+
+--- EXAMPLE ---
+172.16.10.0/24 → ae1.10
+172.16.20.0/24 → ae1.20
+144.6.141.166/31 → ethernet1/7
+
+--- HOST ROUTES ---
+172.16.10.1/32 → local interface
+144.6.141.167/32 → firewall IP
+
+--- KEY CHECKS ---
+- All VLANs present
+- WAN subnet present
+- Interface matches expected
+
+==============================================================================
+
+==============================================================================
+4. BGP ROUTE VERIFICATION
+==============================================================================
+Use this to inspect learned routes from upstream
+
+show routing route type bgp
+
+--- EXAMPLE ---
+10.41.0.0/16        → 172.20.255.1
+172.21.0.0/16       → 172.20.255.1
+192.168.0.0/16      → 172.20.255.1
+
+--- KEY FIELDS ---
+nexthop: 172.20.255.1     -> Upstream router
+metric: 100               -> MED / cost
+next-AS: 64512            -> Peer ASN
+
+--- KEY CHECKS ---
+- Routes marked "A" (active)
+- Nexthop reachable
+- Large number of prefixes (~70+)
+
+==============================================================================
+
+==============================================================================
+5. BGP NEIGHBOR STATUS
+==============================================================================
+Use this to verify BGP session health
+
+show routing protocol bgp summary
+
+--- EXAMPLE ---
+Peer: CATO_SHENTON_PARK
+Remote AS: 64512
+Local AS: 64513
+State: Established
+
+Accepted prefixes: 71
+Advertised prefixes: 9
+
+--- KEY CHECKS ---
+Established            -> Session is UP
+Accepted pfx > 0       -> Receiving routes
+Advertised pfx > 0     -> Sending routes
+
+--- TROUBLE INDICATORS ---
+Idle / Active state → session down
+0 prefixes received → routing issue upstream
+
+==============================================================================
+
+==============================================================================
+6. ROUTE LOOKUP (SPECIFIC DESTINATION)
+==============================================================================
+Use this to test routing decision
+
+show routing route destination <IP/32>
+
+--- EXAMPLES ---
+show routing route destination 8.8.8.8/32
+show routing route destination 1.1.1.1/32
+
+--- IMPORTANT ---
+- MUST use /32 for host lookup
+- If result = 0 routes → no matching route
+
+--- TROUBLE INDICATOR ---
+No route returned → traffic will be dropped
+
+==============================================================================
+
+==============================================================================
+7. ROUTING SUMMARY / RESOURCE CHECK
+==============================================================================
+show routing summary
+
+--- CURRENT STATE ---
+Total routes:       ~95
+Connected routes:   22
+Static routes:      2
+BGP routes:         71
+
+--- ADMIN DISTANCE ---
+Connected: 0
+Static:    10
+eBGP:      20
+iBGP:      200
+
+--- KEY INSIGHT ---
+- eBGP preferred over iBGP
+- Static overrides BGP (lower AD)
+
+==============================================================================
+
+==============================================================================
+8. COMMON TROUBLESHOOTING COMMANDS
+==============================================================================
+--- FILTER ROUTES ---
+show routing route | match <prefix>
+
+--- CHECK DEFAULT ---
+show routing route | match 0.0.0.0
+
+--- CHECK BGP ONLY ---
+show routing route type bgp
+
+--- CHECK CONNECTED ---
+show routing route type connect
+
+==============================================================================
+
+==============================================================================
+TROUBLESHOOTING CHECKLIST (ROUTING)
+==============================================================================
+
+1. Check Default Route
+Ensure 0.0.0.0/0 exists and points to correct nexthop
+
+2. Verify BGP Session
+Must be "Established"
+
+3. Check Prefix Count
+If 0 routes → upstream issue
+
+4. Validate Nexthop Reachability
+Ping 172.20.255.1 from firewall
+
+5. Check ARP (Layer 2)
+If ARP incomplete → routing will fail
+
+6. Route Lookup Test
+Test with:
+show routing route destination <IP>/32
+
+7. Interface State
+Ensure ae1.2100 is UP
+
+==============================================================================
+
+==============================================================================
+DESIGN NOTES / TAKEAWAYS
+==============================================================================
+- Firewall acting as edge with eBGP upstream
+- Static default route used for internet breakout
+- Internal VLANs handled via connected routes
+- BGP used for internal/private network reachability
+- Clean separation of:
+  Connected (local)
+  Static (default)
+  BGP (remote networks)
+
+==============================================================================
+
+END
+==============================================================================
