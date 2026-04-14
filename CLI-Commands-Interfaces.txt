@@ -1,0 +1,181 @@
+==============================================================================
+PALO ALTO: INTERFACE & ARP TROUBLESHOOTING GUIDE
+==============================================================================
+
+==============================================================================
+1. PHYSICAL & LOGICAL INTERFACE LIST
+==============================================================================
+Use this to verify interface state, speed, duplex, and assignments
+
+show interface all                                   # Full interface overview
+show interface ethernet1/7                           # Specific interface stats
+
+--- EXAMPLE: Checking WAN Interface ---
+show interface ethernet1/7
+
+Use this to verify:
+- link state (up/down)
+- speed/duplex
+- error counters
+
+--- KEY FIELDS TO CHECK ---
+up                     -> Interface is physically up
+1000/full              -> Speed/duplex negotiated correctly
+power-down             -> Interface administratively down
+ukn/ukn                -> No negotiation / no link
+
+==============================================================================
+
+==============================================================================
+2. AGGREGATE (LACP) VERIFICATION
+==============================================================================
+Use this to verify LACP bundle health
+
+show interface ae1                                 # Aggregate interface status
+show lacp aggregate-ethernet ae1                   # LACP details
+
+--- EXAMPLE ---
+show interface ae1
+
+--- KEY FIELDS TO CHECK ---
+ae1: up                    -> Aggregate interface is operational
+Members: e1/19, e1/20      -> Both links active
+10G/full                   -> Expected speed
+
+--- TROUBLE INDICATORS ---
+- Member link down → check SFP/cabling
+- Missing member → LACP mismatch or config issue
+- ae1 down → no active members
+
+==============================================================================
+
+==============================================================================
+3. VLAN / SUBINTERFACE VERIFICATION
+==============================================================================
+Use this to confirm VLAN tagging and L3 gateway configuration
+
+show interface all
+
+--- EXAMPLE SUBINTERFACES ---
+ae1.10     VLAN 10    CORP_USER      172.16.10.1/24
+ae1.20     VLAN 20    CORP_SERVER    172.16.20.1/24
+ae1.70     VLAN 70    GUEST          172.16.70.1/24
+ae1.100    VLAN 100   VOICE          172.16.100.1/24
+
+--- KEY CHECKS ---
+- VLAN tag matches switch config
+- Interface in correct zone
+- IP address is correct gateway
+
+==============================================================================
+
+==============================================================================
+4. ARP TABLE VERIFICATION
+==============================================================================
+Use this to validate Layer 2 reachability
+
+show arp all
+show arp ethernet1/7
+
+--- EXAMPLE ---
+show arp ethernet1/7
+
+--- STATUS VALUES ---
+c - complete     -> MAC learned (GOOD)
+i - incomplete   -> No ARP reply (PROBLEM)
+s - static       -> Manually configured
+
+--- CURRENT ISSUE EXAMPLE ---
+ethernet1/7   144.6.141.166   (incomplete)
+
+Meaning:
+- ARP requests sent
+- No reply from upstream device
+
+==============================================================================
+
+==============================================================================
+5. OUTSIDE INTERFACE (WAN) VALIDATION
+==============================================================================
+Interface:
+ethernet1/7
+IP: 144.6.141.167/31
+Peer: 144.6.141.166
+
+--- TEST COMMANDS ---
+ping host 144.6.141.166 source 144.6.141.167
+show arp ethernet1/7
+
+--- EXPECTED STATE ---
+- Interface UP
+- ARP COMPLETE
+- Ping SUCCESS
+
+--- CURRENT STATE ---
+- Interface UP
+- ARP INCOMPLETE
+- Ping FAIL
+
+==============================================================================
+
+==============================================================================
+6. QUICK TROUBLESHOOTING COMMANDS
+==============================================================================
+--- CLEAR ARP ---
+clear arp all
+
+--- GENERATE TRAFFIC ---
+ping host 144.6.141.166 source 144.6.141.167
+
+--- CHECK INTERFACE COUNTERS ---
+show interface ethernet1/7
+
+==============================================================================
+
+==============================================================================
+TROUBLESHOOTING CHECKLIST (ARP / WAN)
+==============================================================================
+
+1. Check Physical Link
+If interface is down → check cable, SFP, switch port
+
+2. Verify Correct Port
+Ensure ISP is connected to ethernet1/7 (not old port ethernet1/1)
+
+3. Check Peer Device
+Confirm upstream router is:
+- Powered ON
+- Configured with 144.6.141.166/31
+
+4. Validate Layer 2
+- No VLAN tagging mismatch
+- Port should be L3 (untagged)
+
+5. ISP / Provider Issues
+- Service not provisioned
+- MAC filtering enabled
+- Port not activated
+
+6. ARP Behaviour
+If ARP = INCOMPLETE:
+→ Device is reachable at L1 but failing at L2
+
+7. HA Considerations
+- Ensure active firewall owns the interface
+- HA links (ha1/hsci) not impacting dataplane
+
+==============================================================================
+
+==============================================================================
+DESIGN NOTES / TAKEAWAYS
+==============================================================================
+- ae1 (LACP) + subinterfaces = best practice for segmentation
+- Zones correctly separate user/server/guest traffic
+- /31 WAN = efficient point-to-point addressing
+- Troubleshooting flow:
+  L1 (link) → L2 (ARP) → L3 (ping)
+
+==============================================================================
+
+END
+==============================================================================
